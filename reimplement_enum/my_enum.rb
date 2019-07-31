@@ -7,11 +7,13 @@ module MyEnum
   module ClassMethods
     def enum(definitions)
       definitions.each do |attribute_name, value_names|
-        define_enum_methods(attribute_name, pretty(value_names))
+        Definer.define_enum_methods(self, attribute_name, value_names)
       end
     end
+  end
 
-    def pretty(value_names)
+  module Definer
+    def self.pretty(value_names)
       if value_names.is_a?(Hash)
         value_names
       elsif value_names.is_a?(Array)
@@ -20,28 +22,30 @@ module MyEnum
         end
       end
     end
+    private_class_method :pretty
 
-    def define_enum_methods(attribute_name, value_names)
+    def self.define_enum_methods(extendee, attribute_name, raw_value_names)
+      value_names = pretty(raw_value_names)
 
-      define_method(attribute_name) do
+      extendee.define_method(attribute_name) do
         value_names.invert[instance_variable_get("@#{attribute_name}")]
       end
 
       value_names.each do |value_name, value|
         # instance methods
-        define_method("#{value_name}?") {
+        extendee.define_method("#{value_name}?") {
           send(attribute_name).to_s == value_name.to_s
         }
-        define_method("#{value_name}!") {
+        extendee.define_method("#{value_name}!") {
           instance_variable_set("@#{attribute_name}", value)
         }
 
         # class methods
-        define_singleton_method("#{value_name}") {
+        extendee.define_singleton_method("#{value_name}") {
           $database.select { |record| record.public_send("#{value_name}?") }
         }
 
-        define_singleton_method("not_#{value_name}") {
+        extendee.define_singleton_method("not_#{value_name}") {
           $database.reject { |record| record.public_send("#{value_name}?") }
         }
       end
